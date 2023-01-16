@@ -1,0 +1,99 @@
+.card-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-gap: 20px;
+    padding: auto;
+  }
+
+  .card {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    transition: 0.3s;
+    border-radius: 5px;
+  }
+
+  .card:hover {
+    box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+  }
+
+  .card img {
+    width: 100%;
+    border-radius: 5px 0 0 5px;
+  }
+
+  .card h3 {
+    margin: 0;
+    padding: 10px;
+    font-size: 16px;
+  }
+
+  .card .type {
+    margin: 0;
+    padding: 10px;
+    font-size: 14px;
+    color: #808080;
+  }
+
+  .card p {
+    margin: 0;
+    padding: 0 10px 10px;
+    font-size: 14px;
+    color: #808080;
+  }
+
+  .card .price {
+    margin: 10px 0;
+    padding: 5px;
+    font-size: 14px;
+    color: #4caf50;
+    font-weight: bold;
+  }
+
+  .card select {
+    margin: 10px 0;
+    padding: 5px;
+    width: 100%;
+    font-size: 14px;
+  }
+
+  .card button {
+    margin: 0;
+    padding: 10px;
+    background-color: #4caf50;
+    border: none;
+    color: white;
+    cursor: pointer;
+    width: 100%;
+    font-size: 14px;
+    border-bottom-right-radius: 5px;
+  }
+
+  .card button:hover {
+    background-color: #45a049;
+  }
+  .size-options {
+    display: flex;
+    margin-bottom: 16px;
+  }
+  
+  .size-options button {
+    background-color: #fff;
+    color: #333;
+    border: 1px solid #4CAF50;
+    padding: 8px;
+    margin-right: 8px;
+    cursor: pointer;
+    border-radius: 50px;
+  }
+  
+  .size-options button:hover {
+    background-color: #4CAF50;
+    color: #fff;
+  }
+  .size-options button.active {
+    background-color: #4CAF50;
+    color: #fff;
+  }
+  
+  

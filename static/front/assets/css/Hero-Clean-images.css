@@ -1,0 +1,36 @@
+.fit-cover {
+  object-fit: cover;
+}
+
+div[data-reflow-type="product-list"] {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 10px;
+  padding-left: 10px;
+}
+
+div[data-reflow-item] {
+  width: 50%;
+  text-align: center;
+}
+
+div[data-reflow-item] img {
+  width: 90%;
+}
+div[data-reflow-item] p:last-of-type {
+  font-weight: bold;
+}
+
+div[data-reflow-item] button {
+  display: block;
+  margin: 10px auto;
+  padding: 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+.price-product {
+  text-align: center;
+  margin-top: 10px;
+}
