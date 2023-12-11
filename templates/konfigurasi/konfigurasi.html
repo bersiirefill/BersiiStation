@@ -1,0 +1,315 @@
+<div class="kt-portlet kt-portlet--mobile">
+    <div class="kt-portlet__head">
+        <div class="kt-portlet__head-label">
+            <h3 class="kt-portlet__head-title">
+                Konfigurasi
+            </h3>
+        </div>
+        <div class="kt-portlet__head-toolbar">
+            <div class="kt-portlet__head-wrapper">
+                <div class="dropdown dropdown-inline">
+                    <button type="button" id="refreshhh" onclick="refresh(this)" data-page="konfigurasi" data-name="Konfigurasi" class="btn btn-default btn-sm btn-bold btn-upper">Refresh</button>
+                    <button type="button" class="btn btn-warning btn-sm btn-bold btn-upper ml-2" id="diagnostik" data-toggle="modal" data-target="#exampleModalBackdropStatic">Diagnostik</button>
+                    <button type="button" class="btn btn-info btn-sm btn-bold btn-upper ml-2" id="kalibrasi" data-toggle="modal" data-target="#exampleModalBackdropStatic2">Kalibrasi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <form class="kt-form kt-form--label-right" id="konfform" method="POST" action="" enctype="multipart/form-data">
+        <div class="kt-portlet__body">
+
+            <div class="form-group form-group-last">
+                <div class="alert alert-secondary" role="alert">
+                    <div class="alert-icon"><i class="flaticon-warning kt-font-brand"></i></div>
+                    <div class="alert-text">
+                        Pastikan koneksi jaringan internet aman untuk memastikan data terkirim dengan baik.
+                    </div>
+                </div>
+            </div>
+            <div class="form-group row">
+                <label for="nomor_seri" class="col-2 col-form-label">Nomor Seri</label>
+                <div class="col-10">
+                    <input class="form-control" type="text" value="{{ nomor_seri }}" id="nomor_seri" name="nomor_seri" disabled>
+                </div>
+            </div>
+            
+            <div class="form-group row">
+                <label for="latitude" class="col-2 col-form-label">Latitude</label>
+                <div class="col-10">
+                    <input class="form-control" type="text" value="{{ latitude }}" id="latitude" name="latitude" disabled>
+                </div>
+            </div>
+
+            <div class="form-group row">
+                <label for="longitude" class="col-2 col-form-label">Longitude</label>
+                <div class="col-10">
+                    <input class="form-control" type="text" value="{{ longitude }}" id="longitude" name="longitude" disabled>
+                </div>
+            </div>
+
+            <div class="form-group row">
+                <label for="status" class="col-2 col-form-label">Status Mesin</label>
+                <div class="col-10">
+                    <select class="form-control" id="status" name="status">
+                        <option value="1">Aktif</option>
+                        <option value="0">Tidak Aktif</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group row">
+                <label for="alamat" class="col-2 col-form-label">Alamat</label>
+                <div class="col-10">
+                    <input class="form-control" type="text" value="{{ alamat }}" id="alamat" name="alamat" disabled>
+                </div>
+            </div>
+
+            <div class="form-group row">
+                <label for="update_time" class="col-2 col-form-label">Tanggal Update</label>
+                <div class="col-10">
+                    <input class="form-control" type="datetime-local" value="{{ update_terakhir }}" id="update_time" disabled>
+                </div>
+            </div>
+
+            <div class="kt-portlet__foot">
+                <div class="kt-form__actions">
+                    <div class="row">
+                        <div class="col-2">
+                        </div>
+                        <div class="col-10">
+                            <button type="submit" class="btn btn-success">Kirim</button>
+                            <button type="reset" class="btn btn-secondary">Batal</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </form>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="exampleModalBackdropStatic" data-backdrop="static" tabindex="-1" role="dialog" aria-labelledby="exampleModalBackdropStatic" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalCenterTitle">Diagnostik Pompa</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <button type="button" id="nyala" onclick="turnOn()" class="btn btn-outline-success">Hidupkan Pompa</button>
+                <button type="button" id="mati" onclick="turnOff()" class="btn btn-outline-danger">Matikan Pompa</button>
+                <input type="hidden" name="flag" id="flag" value="">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" data-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="exampleModalBackdropStatic2" data-backdrop="static" tabindex="-1" role="dialog" aria-labelledby="exampleModalBackdropStatic2" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <form action="" enctype="multipart/form-data" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exampleModalCenterTitle">Kalibrasi Tangki</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-secondary" role="alert">
+                        <div class="alert-icon"><i class="flaticon-warning kt-font-brand"></i></div>
+                        <div class="alert-text">
+                            Pastikan tangki dalam keadaan kosong.
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label for="kedalaman" class="col-2 col-form-label">Kedalaman (cm)</label>
+                        <div class="col-10">
+                            <input class="form-control" type="text" value="{{ kedalaman }}" id="kedalaman" name="kedalaman" disabled>
+                            <br>
+                            <button type="button" id="nyalasensor" onclick="turnOnSensor()" class="btn btn-outline-success">Hidupkan Sensor</button>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label for="kapasitas" class="col-2 col-form-label">Kapasitas (liter)</label>
+                        <div class="col-10">
+                            <input class="form-control" type="text" value="{{ kapasitas }}" id="kapasitas" onchange="hitungKonversi()" name="kapasitas">
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label for="konversi" class="col-2 col-form-label">Konversi (liter/cm)</label>
+                        <div class="col-10">
+                            <input class="form-control" type="text" value="{{ konversi }}" id="konversi" name="konversi" disabled>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" onclick="simpanKalibrasi()" class="btn btn-outline-success">Simpan</button>
+                    <button type="button" class="btn btn-outline-danger" data-dismiss="modal">Tutup</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+    $(document).ready(function(){
+        var targetText = "{{ status_mesin }}";
+        $('#status').find('option:contains("' + targetText + '")').filter(function() {
+            return $(this).text() === targetText;
+        }).prop('selected', true);
+    });
+
+    function turnOnSensor(){
+        Swal.fire({
+            title: 'Sedang mengambil data...',
+            text: 'Mohon menunggu',
+            onBeforeOpen: () => {
+                Swal.showLoading()
+            }
+        });
+        $.ajax({
+            url: '/kalibrasi',
+            type: 'POST',
+            success: function(res){
+                console.log(res);
+                // Parsing JSON using jQuery
+                var jsonObject = jQuery.parseJSON(res);
+                // Accessing the parsed data
+                var jarakValue = jsonObject.jarak;
+                $('#kedalaman').val(jarakValue);
+                hitungKonversi();
+                Swal.close();
+            }
+        });
+    }
+
+    function hitungKonversi(){
+        var kapasitas = $('#kapasitas').val() || 0;
+        var kedalaman = $('#kedalaman').val() || 0;
+        var konversi = kapasitas / kedalaman;
+        console.log(konversi);
+        // $('#konversi').val(Math.round(konversi));
+        // $('#konversi').val(konversi);
+        $('#konversi').val(konversi.toFixed(2));
+    }
+
+    function simpanKalibrasi(){
+        $('#exampleModalBackdropStatic2').modal('hide');
+        KTApp.blockPage({
+			overlayColor: '#000000',
+			type: 'v2',
+			state: 'primary',
+			message: 'Sedang memproses data, mohon menunggu...'
+		});
+        $.ajax({
+            url: '/simpan_kalibrasi',
+            type: 'POST',
+            data: {
+                konversi: $('#konversi').val(),
+                kapasitas: $('#kapasitas').val(),
+                kedalaman: $('#kedalaman').val()
+            },
+            success: function(res){
+                console.log(res);
+                KTApp.unblockPage();
+            }
+        });
+    }
+
+    function turnOn(){
+        $.ajax({
+            url: '/hardware/on',
+            type: 'GET',
+            success: function(data) {
+                console.log('on');
+            },
+        });
+    }
+
+    function turnOff(){
+        $.ajax({
+            url: '/hardware/off',
+            type: 'GET',
+            success: function(data) {
+                console.log('off');
+            },
+        });
+    }
+
+    function refresh(element){
+        let page = element.getAttribute('data-page');
+		let nama = element.getAttribute('data-name');
+        KTApp.blockPage({
+			overlayColor: '#000000',
+			type: 'v2',
+			state: 'primary',
+			message: 'Sedang memproses data, mohon menunggu...'
+		});
+        $.ajax({
+            url: '/konfigurasi',
+            type: 'POST',
+            success: function(data) {
+				$('.endsss').text(nama);
+				$('#ttl').text('Savon | ' + nama);
+                $('#target').html(data);
+				KTApp.unblockPage();
+            },
+            error: function(xhr, status, error) {
+                if (xhr.status === 419) {
+                    window.location.reload();
+                }
+            }
+        });
+    }
+
+    function sbmt(){
+        KTApp.blockPage({
+			overlayColor: '#000000',
+			type: 'v2',
+			state: 'primary',
+			message: 'Sedang memproses data, mohon menunggu...'
+		});
+        var stt = $('#status').val();
+        $.ajax({
+            url: '/save_konfigurasi',
+            type: 'POST',
+            data: {
+                status: stt
+            },
+            success: function(data) {
+                KTApp.unblockPage();
+                swal.fire({
+                    title: 'Berhasil',
+                    text: 'Konfigurasi berhasil disimpan',
+                    type: 'success',
+                    confirmButtonText: 'OK'
+                }).then(function(result) {
+                    if (result.value) {
+                        $('#refreshhh').click();
+                    }
+                });
+            },
+        });
+    }
+
+    $('#konfform').submit(function(e) {
+        e.preventDefault();
+        swal.fire({
+            title: 'Apa Anda yakin?',
+            text: 'Simpan konfigurasi ?',
+            type: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Simpan',
+            cancelButtonText: 'Batal',
+        }).then(function(result) {
+            if (result.value) {
+                // User confirmed, trigger the form submission
+                sbmt();
+            }
+        });
+    });
+</script>
