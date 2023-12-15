@@ -7,6 +7,7 @@ import json
 import time
 import subprocess
 import RPi.GPIO as GPIO
+import pusher
 from flask import Flask, request, jsonify, render_template, session, url_for, redirect
 from flask_apscheduler import APScheduler
 from datetime import datetime
@@ -36,6 +37,28 @@ GPIO.output(refill, GPIO.LOW)
 
 # Kalibrasi
 json_file_path = "config.json"
+
+# Pusher Notification
+pusher_client = pusher.Pusher(
+  app_id='1722594',
+  key='47654494660254b1d35f',
+  secret='e4372837d33353c1a97c',
+  cluster='ap1',
+  ssl=True
+)
+
+# Kirim notifikasi
+def sendpusher(channelset, eventset, data = {}):
+   title = data["title"]
+   body = data["body"]
+   channel = channelset
+   event = eventset
+   array = {
+      'title': title,
+      'body': body,
+   }
+   operation = pusher_client.trigger(channel, event, array)
+   return operation
 
 # Serial Number - Nomor Seri
 def getserial():
@@ -127,6 +150,7 @@ def master():
       session["email_admin"] = email_admin
       session["jabatan_admin"] = jabatan_admin
       session["token_admin"] = token_admin
+      session["nomor_seri"] = getserial()
       # Render halaman dashboard
       admin_ssn = session["token_admin"]
       # Data yang dikirim ke API
@@ -204,9 +228,10 @@ def realtime_stok():
    data = {
       'nomor_seri':getserial(),
       'stok_produk':stok_produk,
+      'jarak_pantul':distance,
    }
    # Kirim POST ke server dan simpan sebagai object
-   rqs = requests.post(url = "https://bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
+   rqs = requests.post(url = "https://bersii.my.id/api/cron_stok", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
    rds = rqs.json()
    # print(rds)
    stok_produkr = rds["data"]["stok"]
@@ -327,7 +352,22 @@ def simpan_kalibrasi():
    except Exception as e:
       return jsonify({"message": f"Error: {str(e)}"}), 500
 
-# Job terjadwal via cron
+@app.route("/notify", methods =["POST"])
+def notify():
+   title = request.form.get("title")
+   body = request.form.get("body")
+   data = {
+      'title': title,
+      'body': body,
+   }
+   operation = sendpusher('notifications', 'admin-notif', data)
+   return operation
+
+# Job terjadwal via cron & interval
+
+# @scheduler.task('cron', id='cron_stok', minute='5', hour='6')
+
+
 @scheduler.task('interval', id='cron_stok', seconds=60)
 def cron_stok():
    pulse_start = 0
@@ -355,6 +395,7 @@ def cron_stok():
    data = {
       'nomor_seri':getserial(),
       'stok_produk':stok_produk,
+      'jarak_pantul':distance,
    }
    # Kirim POST ke server dan simpan sebagai object
    rqs = requests.post(url = "https://bersii.my.id/api/cron_stok", data = data, headers = {"Accept": "application/json"})
@@ -363,7 +404,18 @@ def cron_stok():
    # print('Isi : ' + str(data["stok_produk"]) + ' / Jarak Pantul : ' + str(data["distance"]) + ' ------ ' + current_datetime.strftime("%Y-%m-%d %H:%M:%S")) 
    status = rds["status"]
    message = rds["message"]
-   print(' * ' + str(message) + ' --- (Stok : ' + str(stok_produk) + ' / Jarak Pantul : ' + str(distance) + ' --- ' + current_datetime.strftime("%Y-%m-%d %H:%M:%S"))
+   nama_produk = rds["data"]["nama_produk"]
+   # Pusher
+   data = {
+      'title': 'Stok',
+      'body': {
+         'stok': stok_produk,
+         'jarak': distance,
+         'nama_produk': nama_produk,
+      },
+   }
+   operation = sendpusher('stok-'+getserial(), 'station-stok', data)
+   print(' * ' + str(message) + ' --- Stok : ' + str(stok_produk) + ' / Jarak Pantul : ' + str(distance) + ' --- ' + current_datetime.strftime("%Y-%m-%d %H:%M:%S"))
 
 if __name__ == "__main__":
    try:

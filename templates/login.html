@@ -295,7 +295,12 @@ License: You must have a valid license purchased only from https://themes.getboo
 		};
 		// BASE_URL = '<?php echo base_url('index.php/') ?>';
 	</script>
-
+	<script>
+		$(document).ready(function() {
+			var serial = '{{ session["nomor_seri"] }}';
+			localStorage.setItem('nomor_seri', serial);
+		});
+	</script>
 	<!-- end::Global Config -->
 
 </body>

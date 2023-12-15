@@ -159,6 +159,26 @@
     $(document).ready(function() {
         // interval = setInterval(fetchData, 10000);
         fetchData();
+        Pusher.logToConsole = false;
+				var pusher = new Pusher('47654494660254b1d35f', {
+					cluster: 'ap1'
+				});
+        var serial = localStorage.getItem('nomor_seri');
+        var channel = pusher.subscribe('stok-'+serial);
+        channel.bind('station-stok', function(data) {
+            var datas = data.body;
+            var stok_produk = datas.stok;
+            var nama_produk = datas.nama_produk;
+            // Get the existing chart data
+            var existingData = myBarChart.data.datasets[0].data;
+            var existingLabels = myBarChart.data.datasets[0].label;
+            console.log(myBarChart.data);
+            // Update only the necessary value(s)
+            existingData[0] = parseFloat(stok_produk); // Update the first data point
+            existingLabels = nama_produk;
+            // Redraw the chart
+            myBarChart.update();
+				});
     });
 
     function refreshTangki(){
