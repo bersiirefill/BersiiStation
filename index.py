@@ -6,8 +6,11 @@ import requests
 import json
 import time
 import subprocess
+import re
 import RPi.GPIO as GPIO
 import pusher
+# import ngrok
+from pyngrok import conf, ngrok
 from flask import Flask, request, jsonify, render_template, session, url_for, redirect
 from flask_apscheduler import APScheduler
 from datetime import datetime
@@ -417,6 +420,22 @@ def cron_stok():
    operation = sendpusher('stok-'+getserial(), 'station-stok', data)
    print(' * ' + str(message) + ' --- Stok : ' + str(stok_produk) + ' / Jarak Pantul : ' + str(distance) + ' --- ' + current_datetime.strftime("%Y-%m-%d %H:%M:%S"))
 
+def set_ngrok(port=6100, ssh=22):
+   ngrok.connect(port)
+   ngrok.connect(ssh, "tcp")
+   tunnels = str(ngrok.get_tunnels())
+   https_match = re.search(r'"https://(.*?)"', tunnels)
+   https_url = https_match.group(1)
+   tcp_match = re.search(r'"tcp://(.*?)"', tunnels)
+   tcp_url = tcp_match.group(1)
+   array = {
+      "nomor_seri": getserial(),
+      "http": "https://"+https_url,
+      "ssh": tcp_url
+   }
+   requests.post(url = "https://bersii.my.id/api/station_public", data = array, headers = {"Accept": "application/json"})
+   return array
+
 if __name__ == "__main__":
    try:
       ip = getipaddress()
@@ -425,7 +444,13 @@ if __name__ == "__main__":
       print(" * Nomor IP : " + ip)
       scheduler.init_app(app)
       scheduler.start()
-      app.run(host=ip, port=6100, debug=False, ssl_context='adhoc')
+      link = set_ngrok()
+      http = link["http"]
+      ssh = link["ssh"]
+      print(f" * URL HTTP Dinamis : {http}")
+      print(f" * URL SSH Dinamis : {ssh}")
+      # app.run(host='0.0.0.0', port=6100, debug=False, ssl_context='adhoc')
+      app.run(host='0.0.0.0', port=6100, debug=False)
       
    except KeyboardInterrupt:
       # Reset GPIO dan Token yang tersimpan
