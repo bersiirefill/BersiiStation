@@ -9,20 +9,38 @@ import subprocess
 import re
 import RPi.GPIO as GPIO
 import pusher
+import threading
+import queue
+import usb.core
+import usb.util
+import sys
 # import ngrok
+from gpiozero import MotionSensor, DistanceSensor, OutputDevice, Device
+from gpiozero.pins.pigpio import PiGPIOFactory
+from time import sleep
 from pyngrok import conf, ngrok
 from flask import Flask, request, jsonify, render_template, session, url_for, redirect
 from flask_apscheduler import APScheduler
 from datetime import datetime
+from rpi_lcd import LCD
 # from apscheduler.schedulers.background import BackgroundScheduler
 app = Flask(__name__)
 app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+input_queue = queue.Queue()
+
+# Inisialisasi LCD
+lcd = LCD()
 
 # Inisialisasi scheduler
 scheduler = APScheduler()
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setwarnings(False)
+# Factory
+pigpiof = PiGPIOFactory()
+
+# GPIO.setmode(GPIO.BCM)
+# GPIO.setwarnings(False)
+# Atur pin PIR sensor
+pir = MotionSensor(19)
 # Atur pin GPIO mesin refill
 mesin_pin = 26
 trigpin = 17
@@ -31,12 +49,14 @@ refill = [mesin_pin, trigpin]
 # Atur status mesin refill
 refillSts = 0
 # Atur pin GPIO mesin refill sebagai output
-for pin in refill:
-    GPIO.setup(pin, GPIO.OUT)
-# Atur pin GPIO Ultrasonic
-GPIO.setup(echopin, GPIO.IN)
-# Matikan mesin refill saat rpi menyala 
-GPIO.output(refill, GPIO.LOW)
+sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
+
+# for pin in refill:
+#    GPIO.setup(pin, GPIO.OUT)
+# # Atur pin GPIO Ultrasonic
+# GPIO.setup(echopin, GPIO.IN)
+# # Matikan mesin refill saat rpi menyala 
+# GPIO.output(refill, GPIO.LOW)
 
 # Kalibrasi
 json_file_path = "config.json"
@@ -65,17 +85,17 @@ def sendpusher(channelset, eventset, data = {}):
 
 # Serial Number - Nomor Seri
 def getserial():
-  # Ambil nomor seri
-  cpuserial = "0000000000000000"
-  try:
-    f = open('/proc/cpuinfo','r')
-    for line in f:
-      if line[0:6]=='Serial':
-        cpuserial = line[10:26]
-    f.close()
-  except:
-    cpuserial = "ERROR000000000"
-  return cpuserial
+   # Ambil nomor seri
+   cpuserial = "0000000000000000"
+   try:
+      f = open('/proc/cpuinfo','r')
+      for line in f:
+         if line[0:6]=='Serial':
+            cpuserial = line[10:26]
+      f.close()
+   except:
+      cpuserial = "ERROR000000000"
+   return cpuserial
   
 def getipaddress():
    ipaddr = subprocess.getoutput('hostname -I').strip()
@@ -205,19 +225,24 @@ def produksi():
 
 @app.route("/realtime_stok", methods=["POST"])
 def realtime_stok():
-   pulse_start = 0
-   pulse_end = 0
-   pulse_duration = 0
-   # Cek jarak antara air dan sensor ultrasonik
-   GPIO.output(trigpin, GPIO.HIGH)
-   time.sleep(0.00001)
-   GPIO.output(trigpin, GPIO.LOW)
-   while GPIO.input(echopin) == GPIO.LOW:
-      pulse_start = time.time()
-   while GPIO.input(echopin) == GPIO.HIGH:
-      pulse_end = time.time()
-   pulse_duration = pulse_end - pulse_start
-   distance = pulse_duration * 17474
+
+   # pulse_start = 0
+   # pulse_end = 0
+   # pulse_duration = 0
+   # # Cek jarak antara air dan sensor ultrasonik
+   # GPIO.output(trigpin, GPIO.HIGH)
+   # time.sleep(0.00001)
+   # GPIO.output(trigpin, GPIO.LOW)
+   # while GPIO.input(echopin) == GPIO.LOW:
+   #    pulse_start = time.time()
+   # while GPIO.input(echopin) == GPIO.HIGH:
+   #    pulse_end = time.time()
+   # pulse_duration = pulse_end - pulse_start
+   # distance = pulse_duration * 17474
+
+   ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
+   distance = ultrasonic_sensor.distance * 100
+
    # Atur isi default tangki
    stok_produk = 0
    if(distance > 26):
@@ -250,6 +275,7 @@ def realtime_stok():
       'jarak' : round(distance),
       'nama_produk' : nama_produkr,
    }
+   ultrasonic_sensor.close()
    return json.dumps(templateData)
 
 # Pembukuan
@@ -314,23 +340,31 @@ def hardware(status):
 
 @app.route("/kalibrasi", methods=["POST"])
 def kalibrasi():
-   pulse_start = 0
-   pulse_end = 0
-   pulse_duration = 0
-   # Cek jarak antara air dan sensor ultrasonik
-   GPIO.output(trigpin, GPIO.HIGH)
-   time.sleep(0.00001)
-   GPIO.output(trigpin, GPIO.LOW)
-   while GPIO.input(echopin) == GPIO.LOW:
-      pulse_start = time.time()
-   while GPIO.input(echopin) == GPIO.HIGH:
-      pulse_end = time.time()
-   pulse_duration = pulse_end - pulse_start
-   distance = pulse_duration * 17474
+
+   # pulse_start = 0
+   # pulse_end = 0
+   # pulse_duration = 0
+   # # Cek jarak antara air dan sensor ultrasonik
+   # GPIO.output(trigpin, GPIO.HIGH)
+   # time.sleep(0.00001)
+   # GPIO.output(trigpin, GPIO.LOW)
+   # while GPIO.input(echopin) == GPIO.LOW:
+   #    pulse_start = time.time()
+   # while GPIO.input(echopin) == GPIO.HIGH:
+   #    pulse_end = time.time()
+   # pulse_duration = pulse_end - pulse_start
+   # distance = pulse_duration * 17474
+
+   ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
+   distance = ultrasonic_sensor.distance * 100
+   pulse_duration = ultrasonic_sensor.pulse_duration
+
    templateData = {
       'durasi' : round(pulse_duration),
       'jarak' : round(distance),
    }
+
+   ultrasonic_sensor.close()
    return json.dumps(templateData)
 
 @app.route("/simpan_kalibrasi", methods=["POST"])
@@ -373,19 +407,23 @@ def notify():
 
 @scheduler.task('interval', id='cron_stok', seconds=60)
 def cron_stok():
-   pulse_start = 0
-   pulse_end = 0
-   pulse_duration = 0
-   # Cek jarak antara air dan sensor ultrasonik
-   GPIO.output(trigpin, GPIO.HIGH)
-   time.sleep(0.00001)
-   GPIO.output(trigpin, GPIO.LOW)
-   while GPIO.input(echopin) == GPIO.LOW:
-      pulse_start = time.time()
-   while GPIO.input(echopin) == GPIO.HIGH:
-      pulse_end = time.time()
-   pulse_duration = pulse_end - pulse_start
-   distance = pulse_duration * 17474
+   # pulse_start = 0
+   # pulse_end = 0
+   # pulse_duration = 0
+   # # Cek jarak antara air dan sensor ultrasonik
+   # GPIO.output(trigpin, GPIO.HIGH)
+   # time.sleep(0.00001)
+   # GPIO.output(trigpin, GPIO.LOW)
+   # while GPIO.input(echopin) == GPIO.LOW:
+   #    pulse_start = time.time()
+   # while GPIO.input(echopin) == GPIO.HIGH:
+   #    pulse_end = time.time()
+   # pulse_duration = pulse_end - pulse_start
+   # distance = pulse_duration * 17474
+
+   ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
+   distance = ultrasonic_sensor.distance * 100
+   
    # Atur isi default tangki
    stok_produk = 0
    if(distance > 26):
@@ -419,6 +457,7 @@ def cron_stok():
    }
    operation = sendpusher('stok-'+getserial(), 'station-stok', data)
    print(' * ' + str(message) + ' --- Stok : ' + str(stok_produk) + ' / Jarak Pantul : ' + str(distance) + ' --- ' + current_datetime.strftime("%Y-%m-%d %H:%M:%S"))
+   ultrasonic_sensor.close()
 
 def set_ngrok(port=6100, ssh=22):
    ngrok.connect(port)
@@ -436,24 +475,186 @@ def set_ngrok(port=6100, ssh=22):
    requests.post(url = "https://bersii.my.id/api/station_public", data = array, headers = {"Accept": "application/json"})
    return array
 
+def scroll_text(text, delay=0.5):
+   length = len(text)
+   text = text + ' ' * length
+   for i in range(len(text) - length + 1):
+      lcd.text(text[i:i+length], 1)
+      sleep(delay)
+
+def start_flask():
+   ip = getipaddress()
+   link = set_ngrok()
+   print("Bersii Refill Station - V2.0")
+   print(" * Nomor Seri : " + getserial())
+   print(" * Nomor IP : " + ip)
+   http = link["http"]
+   ssh = link["ssh"]
+   print(f" * URL HTTP Dinamis : {http}")
+   print(f" * URL SSH Dinamis : {ssh}")
+   # app.run(host='0.0.0.0', port=6100, debug=False, ssl_context='adhoc')
+
+   lcd.text("Bersii Refill", 1)
+   lcd.text("Station - V2.0", 2)
+   sleep(2)
+   lcd.clear()
+   lcd.text("Nomor Seri:", 1)
+   lcd.text(getserial(), 2)
+   sleep(2)
+   lcd.clear()
+   lcd.text("Nomor IP:", 1)
+   lcd.text(ip, 2)
+   sleep(2)
+   lcd.clear()
+
+   lcd.text("URL HTTP:", 1)
+   sleep(2)
+   scroll_text(http)
+   sleep(2)
+   lcd.clear()
+
+   lcd.text("URL SSH:", 1)
+   sleep(2)
+   scroll_text(ssh)
+   sleep(2)
+   lcd.clear()
+   
+   lcd.text("Sistem Siap", 1)
+   sleep(2)
+   lcd.clear()
+
+   scheduler.init_app(app)
+   scheduler.start()
+   app.run(host='0.0.0.0', port=6100, debug=False)
+
+def set_pir():
+    if pir.wait_for_motion():
+        return True 
+    return False
+
+# USB Keyboard input handling
+def monitor_usb_keyboard():
+   key_mapping = {
+      89: '1',
+      90: '2',
+      91: '3',
+      92: '4',
+      93: '5',
+      94: '6',
+      95: '7',
+      96: '8',
+      97: '9',
+      98: '0',
+      88: 'enter',
+      42: 'delete',
+   }
+
+   refill_output = OutputDevice(pin=mesin_pin, pin_factory=pigpiof)
+
+   fp = open('/dev/hidraw0', 'rb')
+   lcd.text("Bersii Refill", 1)
+   lcd.text("Ketik jml refill", 2)
+   while True:
+      buffer = fp.read(8)
+      for c in buffer:
+         if c > 0:
+            if c in key_mapping:
+               char = key_mapping[c]
+               if char == 'enter':
+                  user_input = ''.join(input_queue.queue)
+                  input_queue.queue.clear()
+                  lcd.clear()
+                  lcd.text("Letakkan Botol", 1)
+                  lcd.text("di bawah", 2)
+                  # Cek apakah ada botol di bawah dengan PIR
+                  rfl = set_pir()
+                  while rfl == False:
+                     sleep(0.1)
+                     rfl = set_pir()
+                     if rfl == True:
+                        break
+                  lcd.clear()
+
+                  # Kalau pakai sensor beneran
+                  # lcd.text(f"Mengisi: {user_input} ltr", 1)
+                  # liter = 10
+                  # flin = float(user_input)
+                  # stk = 0
+                  # while stk < flin:
+                  #    lcd.text(f"{stk} liter", 2)
+                  #    GPIO.output(refill, GPIO.HIGH)
+                  #    liter = liter - stk
+                  #    if(stk == flin):
+                  #       break
+                  # GPIO.output(refill, GPIO.LOW)
+
+                  # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
+                  lcd.text(f"Mengisi: {user_input} ltr", 1)
+                  liter = 10
+                  flin = float(user_input)
+                  for stk in range(int(flin) + 1):
+                     lcd.text(f"{stk} liter", 2)
+                     # GPIO.output(refill, GPIO.HIGH)
+                     refill_output.on()
+                     liter = liter - stk
+                     sleep(1)  # Adjust the sleep duration as needed
+                     if stk == flin:
+                        break
+                  # GPIO.output(refill, GPIO.LOW)
+                  refill_output.off()
+                  lcd.text("Pengisian telah", 1)
+                  lcd.text("selesai", 2)
+                  refill_output.close()
+                  sleep(5)
+                  lcd.clear()
+                  lcd.text("Bersii Refill", 1)
+                  lcd.text("Ketik jml refill", 2)
+
+               elif char == 'delete':
+                  if not input_queue.empty():
+                     queue_list = list(input_queue.queue)
+                     if queue_list:
+                        queue_list.pop()
+                        input_queue.queue = queue_list
+                        lcd.text('Jumlah Pengisian (l)', 1)
+                        lcd.text(''.join(input_queue.queue), 2)
+               else:
+                  input_queue.put(char)
+                  lcd.text('Jumlah Pengisian (l)', 1)
+                  lcd.text(''.join(input_queue.queue), 2)
+            else:
+               lcd.text('Jumlah Pengisian (l)', 1)
+               lcd.text(f"Unknown key: {c}", 2)
+
+
 if __name__ == "__main__":
    try:
-      ip = getipaddress()
-      print("Bersii Refill Station - V2.0")
-      print(" * Nomor Seri : " + getserial())
-      print(" * Nomor IP : " + ip)
-      scheduler.init_app(app)
-      scheduler.start()
-      link = set_ngrok()
-      http = link["http"]
-      ssh = link["ssh"]
-      print(f" * URL HTTP Dinamis : {http}")
-      print(f" * URL SSH Dinamis : {ssh}")
-      # app.run(host='0.0.0.0', port=6100, debug=False, ssl_context='adhoc')
-      app.run(host='0.0.0.0', port=6100, debug=False)
+
+      # Thread for Flask app
+      # flask_thread = threading.Thread(target=start_flask)
+      # flask_thread.daemon = True
+      # flask_thread.start()
+
+      # sleep(5)
+
+      usb_thread = threading.Thread(target=monitor_usb_keyboard)
+      usb_thread.daemon = True
+      usb_thread.start()
+
+      # Check if the Flask & USB thread is alive
+      # while not flask_thread.is_alive():
+      #    sleep(0.1)
+      # print("Flask thread is now running.")
+
+      while not usb_thread.is_alive():
+         sleep(0.1)
+      print("USB thread is now running.")
+
+      while True:
+         sleep(1)
       
    except KeyboardInterrupt:
       # Reset GPIO dan Token yang tersimpan
       revoke = revoke_all()
       GPIO.cleanup()	
-      
+      lcd.clear()
