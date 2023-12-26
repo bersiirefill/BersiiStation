@@ -49,7 +49,6 @@ refill = [mesin_pin, trigpin]
 # Atur status mesin refill
 refillSts = 0
 # Atur pin GPIO mesin refill sebagai output
-sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
 
 # for pin in refill:
 #    GPIO.setup(pin, GPIO.OUT)
@@ -57,6 +56,10 @@ sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
 # GPIO.setup(echopin, GPIO.IN)
 # # Matikan mesin refill saat rpi menyala 
 # GPIO.output(refill, GPIO.LOW)
+
+# Solenoid
+psln = 13
+solenoid = OutputDevice(pin=psln, pin_factory=pigpiof)
 
 # Kalibrasi
 json_file_path = "config.json"
@@ -98,7 +101,11 @@ def getserial():
    return cpuserial
   
 def getipaddress():
-   ipaddr = subprocess.getoutput('hostname -I').strip()
+   try:
+      subprocess.check_output(['ip', 'link', 'show', 'wwan0'], stderr=subprocess.STDOUT)
+      ipaddr = subprocess.getoutput('hostname -I | awk \'{print $2}\'').strip()  # Get IP from wwan0
+   except subprocess.CalledProcessError:
+      ipaddr = subprocess.getoutput('hostname -I | awk \'{print $1}\'').strip()  # Get IP from wlan0
    return ipaddr
 
 def revoke_token(sessions):
@@ -329,14 +336,17 @@ def save_konfigurasi():
 
 @app.route("/hardware/<status>")
 def hardware(status):
+   refill_output = OutputDevice(pin=mesin_pin, pin_factory=pigpiof)
    if status == 'on':
-      GPIO.output(refill, GPIO.HIGH)
-      refillSts = GPIO.input(refill)
-      return refillSts
+      # GPIO.output(refill, GPIO.HIGH)
+      # refillSts = GPIO.input(refill)
+      refill_output.on()
    elif status == 'off':
-      GPIO.output(refill, GPIO.LOW)
-      refillSts = GPIO.input(refill)
-      return refillSts
+      # GPIO.output(refill, GPIO.LOW)
+      # refillSts = GPIO.input(refill)
+      refill_output.off()
+   refill_output.close()
+   return status
 
 @app.route("/kalibrasi", methods=["POST"])
 def kalibrasi():
@@ -472,8 +482,31 @@ def set_ngrok(port=6100, ssh=22):
       "http": "https://"+https_url,
       "ssh": tcp_url
    }
+   reqst = requests.post(url = "https://bersii.my.id/api/station_public", data = array, headers = {"Accept": "application/json"})
+   stts = {
+      "nomor_seri": getserial(),
+      "http": "https://"+https_url,
+      "ssh": tcp_url,
+      "status" : reqst
+   }
+   return stts
+
+@scheduler.task('interval', id='reset_ngrok', seconds=7200)
+def reset_ngrok(port=6100, ssh=22):
+   ngrok.connect(port)
+   ngrok.connect(ssh, "tcp")
+   tunnels = str(ngrok.get_tunnels())
+   https_match = re.search(r'"https://(.*?)"', tunnels)
+   https_url = https_match.group(1)
+   tcp_match = re.search(r'"tcp://(.*?)"', tunnels)
+   tcp_url = tcp_match.group(1)
+   array = {
+      "nomor_seri": getserial(),
+      "http": "https://"+https_url,
+      "ssh": tcp_url
+   }
    requests.post(url = "https://bersii.my.id/api/station_public", data = array, headers = {"Accept": "application/json"})
-   return array
+   return True
 
 def scroll_text(text, delay=0.5):
    length = len(text)
@@ -490,10 +523,11 @@ def start_flask():
    print(" * Nomor IP : " + ip)
    http = link["http"]
    ssh = link["ssh"]
+   status = link["status"]
    print(f" * URL HTTP Dinamis : {http}")
    print(f" * URL SSH Dinamis : {ssh}")
    # app.run(host='0.0.0.0', port=6100, debug=False, ssl_context='adhoc')
-
+   print(status)
    lcd.text("Bersii Refill", 1)
    lcd.text("Station - V2.0", 2)
    sleep(2)
@@ -523,6 +557,10 @@ def start_flask():
    sleep(2)
    lcd.clear()
 
+   sleep(2)
+   lcd.text("Bersii Refill", 1)
+   lcd.text("Ketik jml refill", 2)
+
    scheduler.init_app(app)
    scheduler.start()
    app.run(host='0.0.0.0', port=6100, debug=False)
@@ -534,6 +572,7 @@ def set_pir():
 
 # USB Keyboard input handling
 def monitor_usb_keyboard():
+   solenoid.on()
    key_mapping = {
       89: '1',
       90: '2',
@@ -545,6 +584,7 @@ def monitor_usb_keyboard():
       96: '8',
       97: '9',
       98: '0',
+      99: '.',
       88: 'enter',
       42: 'delete',
    }
@@ -552,8 +592,6 @@ def monitor_usb_keyboard():
    refill_output = OutputDevice(pin=mesin_pin, pin_factory=pigpiof)
 
    fp = open('/dev/hidraw0', 'rb')
-   lcd.text("Bersii Refill", 1)
-   lcd.text("Ketik jml refill", 2)
    while True:
       buffer = fp.read(8)
       for c in buffer:
@@ -562,6 +600,8 @@ def monitor_usb_keyboard():
                char = key_mapping[c]
                if char == 'enter':
                   user_input = ''.join(input_queue.queue)
+                  if not user_input or user_input == '0':
+                     break
                   input_queue.queue.clear()
                   lcd.clear()
                   lcd.text("Letakkan Botol", 1)
@@ -588,23 +628,32 @@ def monitor_usb_keyboard():
                   #       break
                   # GPIO.output(refill, GPIO.LOW)
 
+                  for i in range(5, 0, -1):
+                     lcd.text("Mengisi dalam : ", 1)
+                     lcd.text(f"{i}", 2)
+                     sleep(0.5)
+                     if i == 0:
+                        break
+                  
                   # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
                   lcd.text(f"Mengisi: {user_input} ltr", 1)
                   liter = 10
                   flin = float(user_input)
-                  for stk in range(int(flin) + 1):
-                     lcd.text(f"{stk} liter", 2)
+                  for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
+                     lcd.text(f"{stk:.1f} liter", 2)
                      # GPIO.output(refill, GPIO.HIGH)
                      refill_output.on()
-                     liter = liter - stk
+                     solenoid.off()
+                     liter = float(liter) - stk
                      sleep(1)  # Adjust the sleep duration as needed
                      if stk == flin:
                         break
                   # GPIO.output(refill, GPIO.LOW)
                   refill_output.off()
+                  solenoid.on()
                   lcd.text("Pengisian telah", 1)
                   lcd.text("selesai", 2)
-                  refill_output.close()
+                  # refill_output.close()
                   sleep(5)
                   lcd.clear()
                   lcd.text("Bersii Refill", 1)
@@ -631,20 +680,20 @@ if __name__ == "__main__":
    try:
 
       # Thread for Flask app
-      # flask_thread = threading.Thread(target=start_flask)
-      # flask_thread.daemon = True
-      # flask_thread.start()
+      flask_thread = threading.Thread(target=start_flask)
+      flask_thread.daemon = True
+      flask_thread.start()
 
-      # sleep(5)
+      # Check if the Flask & USB thread is alive
+      while not flask_thread.is_alive():
+         sleep(0.1)
+      print("Flask thread is now running.")
+
+      sleep(5)
 
       usb_thread = threading.Thread(target=monitor_usb_keyboard)
       usb_thread.daemon = True
       usb_thread.start()
-
-      # Check if the Flask & USB thread is alive
-      # while not flask_thread.is_alive():
-      #    sleep(0.1)
-      # print("Flask thread is now running.")
 
       while not usb_thread.is_alive():
          sleep(0.1)
@@ -652,9 +701,17 @@ if __name__ == "__main__":
 
       while True:
          sleep(1)
+
+      # while True:
+      #    ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
+      #    distance = ultrasonic_sensor.distance * 100
+      #    print(distance)
+      #    ultrasonic_sensor.close()
+      #    sleep(1)
       
    except KeyboardInterrupt:
+      lcd.clear()
+      solenoid.off()
       # Reset GPIO dan Token yang tersimpan
       revoke = revoke_all()
-      GPIO.cleanup()	
-      lcd.clear()
+      # GPIO.cleanup()	
