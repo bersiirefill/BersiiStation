@@ -64,6 +64,9 @@ solenoid = OutputDevice(pin=psln, pin_factory=pigpiof)
 # Kalibrasi
 json_file_path = "config.json"
 
+# Ngrok
+ngrok_file_path = "urls.json"
+
 # Pusher Notification
 pusher_client = pusher.Pusher(
   app_id='1722594',
@@ -186,15 +189,15 @@ def master():
       # Data yang dikirim ke API
       data = {'nomor_seri':getserial()}
       # Kirim POST ke server dan simpan sebagai object
-      rqs = requests.post(url = "https://bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
-      rds = rqs.json()
-      nama_produk = rds["data"]["nama_produk"]
-      stok_produk = rds["data"]["stok"]
-      harga_produk = rds["data"]["harga_produk"]
+      # rqs = requests.post(url = "https://bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
+      # rds = rqs.json()
+      # nama_produk = rds["data"]["nama_produk"]
+      # stok_produk = rds["data"]["stok"]
+      # harga_produk = rds["data"]["harga_produk"]
       templateData = {
-         'nama_produk' : nama_produk,
-         'stok_produk' : stok_produk,
-         'harga_produk' : harga_produk,
+         'nama_produk' : 'ABC',
+         'stok_produk' : '5',
+         'harga_produk' : '15000',
       }
       return render_template('index.html', **templateData)
    if "token_admin" in session:
@@ -202,15 +205,15 @@ def master():
          data = {'nomor_seri':getserial()}
          # Kirim POST ke server dan simpan sebagai object
          admin_ssn = session["token_admin"]
-         rqs = requests.post(url = "https://bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
-         rds = rqs.json()
-         nama_produk = rds["data"]["nama_produk"]
-         stok_produk = rds["data"]["stok"]
-         harga_produk = rds["data"]["harga_produk"]
+         # rqs = requests.post(url = "https://bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
+         # rds = rqs.json()
+         # nama_produk = rds["data"]["nama_produk"]
+         # stok_produk = rds["data"]["stok"]
+         # harga_produk = rds["data"]["harga_produk"]
          templateData = {
-            'nama_produk' : nama_produk,
-            'stok_produk' : stok_produk,
-            'harga_produk' : harga_produk,
+            'nama_produk' : 'Marjan',
+            'stok_produk' : '5',
+            'harga_produk' : '20000',
          }
          return render_template('index.html', **templateData)
    else:
@@ -469,44 +472,17 @@ def cron_stok():
    print(' * ' + str(message) + ' --- Stok : ' + str(stok_produk) + ' / Jarak Pantul : ' + str(distance) + ' --- ' + current_datetime.strftime("%Y-%m-%d %H:%M:%S"))
    ultrasonic_sensor.close()
 
-def set_ngrok(port=6100, ssh=22):
-   ngrok.connect(port)
-   ngrok.connect(ssh, "tcp")
-   tunnels = str(ngrok.get_tunnels())
-   https_match = re.search(r'"https://(.*?)"', tunnels)
-   https_url = https_match.group(1)
-   tcp_match = re.search(r'"tcp://(.*?)"', tunnels)
-   tcp_url = tcp_match.group(1)
-   array = {
-      "nomor_seri": getserial(),
-      "http": "https://"+https_url,
-      "ssh": tcp_url
-   }
-   reqst = requests.post(url = "https://bersii.my.id/api/station_public", data = array, headers = {"Accept": "application/json"})
+def set_ngrok():
+   with open(ngrok_file_path, 'r') as file:
+      data = json.load(file)
+   https_url = data.get('http')
+   tcp_url = data.get('ssh')
    stts = {
       "nomor_seri": getserial(),
-      "http": "https://"+https_url,
+      "http": https_url,
       "ssh": tcp_url,
-      "status" : reqst
    }
    return stts
-
-@scheduler.task('interval', id='reset_ngrok', seconds=7200)
-def reset_ngrok(port=6100, ssh=22):
-   ngrok.connect(port)
-   ngrok.connect(ssh, "tcp")
-   tunnels = str(ngrok.get_tunnels())
-   https_match = re.search(r'"https://(.*?)"', tunnels)
-   https_url = https_match.group(1)
-   tcp_match = re.search(r'"tcp://(.*?)"', tunnels)
-   tcp_url = tcp_match.group(1)
-   array = {
-      "nomor_seri": getserial(),
-      "http": "https://"+https_url,
-      "ssh": tcp_url
-   }
-   requests.post(url = "https://bersii.my.id/api/station_public", data = array, headers = {"Accept": "application/json"})
-   return True
 
 def scroll_text(text, delay=0.5):
    length = len(text)
@@ -523,11 +499,9 @@ def start_flask():
    print(" * Nomor IP : " + ip)
    http = link["http"]
    ssh = link["ssh"]
-   status = link["status"]
    print(f" * URL HTTP Dinamis : {http}")
    print(f" * URL SSH Dinamis : {ssh}")
    # app.run(host='0.0.0.0', port=6100, debug=False, ssl_context='adhoc')
-   print(status)
    lcd.text("Bersii Refill", 1)
    lcd.text("Station - V2.0", 2)
    sleep(2)
@@ -563,7 +537,7 @@ def start_flask():
 
    scheduler.init_app(app)
    scheduler.start()
-   app.run(host='0.0.0.0', port=6100, debug=False)
+   app.run(host='0.0.0.0', port=6100, debug=False, ssl_context='adhoc')
 
 def set_pir():
     if pir.wait_for_motion():
