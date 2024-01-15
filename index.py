@@ -27,7 +27,7 @@ from rpi_lcd import LCD
 app = Flask(__name__)
 app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
 input_queue = queue.Queue()
-
+nomorid_queue = queue.Queue()
 # Inisialisasi LCD
 lcd = LCD()
 
@@ -43,9 +43,9 @@ pigpiof = PiGPIOFactory()
 pir = MotionSensor(19)
 # Atur pin GPIO mesin refill
 mesin_pin = 26
+psln = 13
 trigpin = 17
 echopin = 27
-refill = [mesin_pin, trigpin]
 # Atur status mesin refill
 refillSts = 0
 # Atur pin GPIO mesin refill sebagai output
@@ -57,9 +57,9 @@ refillSts = 0
 # # Matikan mesin refill saat rpi menyala 
 # GPIO.output(refill, GPIO.LOW)
 
-# Solenoid
-psln = 13
-solenoid = OutputDevice(pin=psln, pin_factory=pigpiof)
+# Pompa & Solenoid
+# solenoid = OutputDevice(pin=psln, pin_factory=pigpiof)
+refill_output = OutputDevice(pin=mesin_pin, pin_factory=pigpiof)
 
 # Kalibrasi
 json_file_path = "config.json"
@@ -75,6 +75,40 @@ pusher_client = pusher.Pusher(
   cluster='ap1',
   ssl=True
 )
+
+def ultras():
+   ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
+   distance = ultrasonic_sensor.distance * 100
+   # pulse = ultrasonic_sensor.echo_time()
+   start_time = None
+   pulse_duration = 0
+   def on_in_range():
+      nonlocal start_time
+      start_time = time.time()
+
+   def on_out_of_range():
+      nonlocal pulse_duration
+      if start_time is not None:
+         pulse_duration += time.time() - start_time
+         start_time = None
+
+   ultrasonic_sensor.when_in_range = on_in_range
+   ultrasonic_sensor.when_out_of_range = on_out_of_range
+
+   ultrasonic_sensor.close()
+   array = {
+      'distance': distance,
+      'pulse_duration': pulse_duration,
+   }
+   return array
+
+def pompas(status = "on"):
+   if(status == "on"):
+      refill_output.on()
+   elif(status == "off"):
+      refill_output.off()
+
+# Now you can use refill_output as needed
 
 # Kirim notifikasi
 def sendpusher(channelset, eventset, data = {}):
@@ -116,37 +150,49 @@ def revoke_token(sessions):
    # Data yang dikirim ke API
    serial = {'nomor_seri':getserial(), 'token_id':ssn_id}
    # Kirim POST ke server dan simpan sebagai object
-   tokenizes_r = requests.post(url = "https://bersii.my.id/api/revoke_station", data = serial, headers = {"Accept": "application/json", "Authorization": "Bearer " + sessions})
+   tokenizes_r = requests.post(url = "https://savon.bersii.my.id/api/revoke_station", data = serial, headers = {"Accept": "application/json", "Authorization": "Bearer " + sessions})
    loads = tokenizes_r.json()
    message = loads["message"]
-   if message == "Token Dicabut":
-      session.pop("id_admin", None)
-      session.pop("nama_admin", None)
-      session.pop("email_admin", None)
-      session.pop("jabatan_admin", None)
-      session.pop("token_admin", None)
-      session.clear()
-   else:
-      print("Token Gagal Dicabut")
+   # if message == "Token Dicabut":
+   #    session.pop("id_admin", None)
+   #    session.pop("nama_admin", None)
+   #    session.pop("email_admin", None)
+   #    session.pop("jabatan_admin", None)
+   #    session.pop("token_admin", None)
+   #    session.clear()
+   # else:
+   #    print("Token Gagal Dicabut")
+   session.pop("id_admin", None)
+   session.pop("nama_admin", None)
+   session.pop("email_admin", None)
+   session.pop("jabatan_admin", None)
+   session.pop("token_admin", None)
+   session.clear()
    return message
    
 def revoke_all():
    # Data yang dikirim ke API
    serial = {'nomor_seri':getserial()}
    # Kirim POST ke server dan simpan sebagai object
-   tokenizes_r = requests.post(url = "https://bersii.my.id/api/revoke_all", data = serial, headers = {"Accept": "application/json"})
+   tokenizes_r = requests.post(url = "https://savon.bersii.my.id/api/revoke_all", data = serial, headers = {"Accept": "application/json"})
    loads = tokenizes_r.json()
    message = loads["message"]
-   if message == "Token Dicabut":
-      session.pop("id_admin", None)
-      session.pop("nama_admin", None)
-      session.pop("email_admin", None)
-      session.pop("jabatan_admin", None)
-      session.pop("token_admin", None)
-      session.clear()
-      print("Semua Token Dicabut")
-   else:
-      print("Token Gagal Dicabut")
+   # if message == "Token Dicabut":
+   #    session.pop("id_admin", None)
+   #    session.pop("nama_admin", None)
+   #    session.pop("email_admin", None)
+   #    session.pop("jabatan_admin", None)
+   #    session.pop("token_admin", None)
+   #    session.clear()
+   #    print("Semua Token Dicabut")
+   # else:
+   #    print("Token Gagal Dicabut")
+   session.pop("id_admin", None)
+   session.pop("nama_admin", None)
+   session.pop("email_admin", None)
+   session.pop("jabatan_admin", None)
+   session.pop("token_admin", None)
+   session.clear()
    return message
 
 @app.route("/logout", methods =["GET", "POST"])
@@ -169,7 +215,7 @@ def master():
       # Data yang dikirim ke API
       data = {'email':email, 'password':password, 'nomor_seri':getserial()}
       # Kirim POST ke server dan simpan sebagai object
-      r = requests.post(url = "https://bersii.my.id/api/login_station_admin", data = data, headers = {"Accept": "application/json"})
+      r = requests.post(url = "https://savon.bersii.my.id/api/login_station_admin", data = data, headers = {"Accept": "application/json"})
       loads = r.json()
       # Fetch
       id_admin = loads["data"]["id_admin"]
@@ -189,33 +235,36 @@ def master():
       # Data yang dikirim ke API
       data = {'nomor_seri':getserial()}
       # Kirim POST ke server dan simpan sebagai object
-      # rqs = requests.post(url = "https://bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
-      # rds = rqs.json()
-      # nama_produk = rds["data"]["nama_produk"]
-      # stok_produk = rds["data"]["stok"]
-      # harga_produk = rds["data"]["harga_produk"]
+      rqs = requests.post(url = "https://savon.bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
+      rds = rqs.json()
+      nama_produk = rds["data"]["nama_produk"]
+      stok_produk = rds["data"]["stok"]
+      harga_produk = rds["data"]["harga_produk"]
       templateData = {
-         'nama_produk' : 'ABC',
-         'stok_produk' : '5',
-         'harga_produk' : '15000',
+         'nama_produk' : nama_produk,
+         'stok_produk' : stok_produk,
+         'harga_produk' : harga_produk,
       }
       return render_template('index.html', **templateData)
    if "token_admin" in session:
          # Data yang dikirim ke API
-         data = {'nomor_seri':getserial()}
+         # data = {'nomor_seri':getserial()}
          # Kirim POST ke server dan simpan sebagai object
-         admin_ssn = session["token_admin"]
-         # rqs = requests.post(url = "https://bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
+         # admin_ssn = session["token_admin"]
+         # print(admin_ssn)
+         # rqs = requests.post(url = "https://savon.bersii.my.id/api/station_stock", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
          # rds = rqs.json()
          # nama_produk = rds["data"]["nama_produk"]
          # stok_produk = rds["data"]["stok"]
          # harga_produk = rds["data"]["harga_produk"]
-         templateData = {
-            'nama_produk' : 'Marjan',
-            'stok_produk' : '5',
-            'harga_produk' : '20000',
-         }
-         return render_template('index.html', **templateData)
+         # templateData = {
+         #    'nama_produk' : nama_produk,
+         #    'stok_produk' : stok_produk,
+         #    'harga_produk' : harga_produk,
+         # }
+         # return render_template('index.html', **templateData)
+         rvk = revoke_all()
+         return render_template("login.html")
    else:
       return render_template("login.html")   
    
@@ -249,9 +298,8 @@ def realtime_stok():
    #    pulse_end = time.time()
    # pulse_duration = pulse_end - pulse_start
    # distance = pulse_duration * 17474
-
-   ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
-   distance = ultrasonic_sensor.distance * 100
+   ultr = ultras()
+   distance = ultr["distance"]
 
    # Atur isi default tangki
    stok_produk = 0
@@ -269,7 +317,7 @@ def realtime_stok():
       'jarak_pantul':distance,
    }
    # Kirim POST ke server dan simpan sebagai object
-   rqs = requests.post(url = "https://bersii.my.id/api/cron_stok", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
+   rqs = requests.post(url = "https://savon.bersii.my.id/api/cron_stok", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
    rds = rqs.json()
    # print(rds)
    stok_produkr = rds["data"]["stok"]
@@ -285,7 +333,6 @@ def realtime_stok():
       'jarak' : round(distance),
       'nama_produk' : nama_produkr,
    }
-   ultrasonic_sensor.close()
    return json.dumps(templateData)
 
 # Pembukuan
@@ -304,7 +351,7 @@ def konfigurasi():
          # Data yang dikirim ke API
          data = {'nomor_seri':getserial()}
          # Kirim POST ke server dan simpan sebagai object
-         r = requests.post(url = "https://bersii.my.id/api/station_status", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
+         r = requests.post(url = "https://savon.bersii.my.id/api/station_status", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
          loads = r.json()
          # Baca Config
          with open(json_file_path, 'r') as file:
@@ -332,23 +379,23 @@ def save_konfigurasi():
    # Data yang dikirim ke API
    data = {'nomor_seri':getserial(), 'status':status}
    # Kirim POST ke server dan simpan sebagai object
-   rqs = requests.post(url = "https://bersii.my.id/api/change_station_status", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
+   rqs = requests.post(url = "https://savon.bersii.my.id/api/change_station_status", data = data, headers = {"Accept": "application/json", "Authorization": "Bearer " + admin_ssn})
    rds = rqs.json()
    msg = rds["message"]
    return msg
 
 @app.route("/hardware/<status>")
 def hardware(status):
-   refill_output = OutputDevice(pin=mesin_pin, pin_factory=pigpiof)
    if status == 'on':
       # GPIO.output(refill, GPIO.HIGH)
       # refillSts = GPIO.input(refill)
-      refill_output.on()
+      # refill_output.on()
+      pompas('on')
    elif status == 'off':
       # GPIO.output(refill, GPIO.LOW)
       # refillSts = GPIO.input(refill)
-      refill_output.off()
-   refill_output.close()
+      # refill_output.off()
+      pompas('off')
    return status
 
 @app.route("/kalibrasi", methods=["POST"])
@@ -368,16 +415,15 @@ def kalibrasi():
    # pulse_duration = pulse_end - pulse_start
    # distance = pulse_duration * 17474
 
-   ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
-   distance = ultrasonic_sensor.distance * 100
-   pulse_duration = ultrasonic_sensor.pulse_duration
+   ultrasonic_sensor = ultras()
+   distance = ultrasonic_sensor["distance"]
+   pulse_duration = ultrasonic_sensor["pulse_duration"]
 
    templateData = {
       'durasi' : round(pulse_duration),
       'jarak' : round(distance),
    }
 
-   ultrasonic_sensor.close()
    return json.dumps(templateData)
 
 @app.route("/simpan_kalibrasi", methods=["POST"])
@@ -434,8 +480,8 @@ def cron_stok():
    # pulse_duration = pulse_end - pulse_start
    # distance = pulse_duration * 17474
 
-   ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
-   distance = ultrasonic_sensor.distance * 100
+   ultrasonic_sensor = ultras()
+   distance = ultrasonic_sensor["distance"]
    
    # Atur isi default tangki
    stok_produk = 0
@@ -452,7 +498,7 @@ def cron_stok():
       'jarak_pantul':distance,
    }
    # Kirim POST ke server dan simpan sebagai object
-   rqs = requests.post(url = "https://bersii.my.id/api/cron_stok", data = data, headers = {"Accept": "application/json"})
+   rqs = requests.post(url = "https://savon.bersii.my.id/api/cron_stok", data = data, headers = {"Accept": "application/json"})
    rds = rqs.json()
    current_datetime = datetime.now()
    # print('Isi : ' + str(data["stok_produk"]) + ' / Jarak Pantul : ' + str(data["distance"]) + ' ------ ' + current_datetime.strftime("%Y-%m-%d %H:%M:%S")) 
@@ -470,7 +516,6 @@ def cron_stok():
    }
    operation = sendpusher('stok-'+getserial(), 'station-stok', data)
    print(' * ' + str(message) + ' --- Stok : ' + str(stok_produk) + ' / Jarak Pantul : ' + str(distance) + ' --- ' + current_datetime.strftime("%Y-%m-%d %H:%M:%S"))
-   ultrasonic_sensor.close()
 
 def set_ngrok():
    with open(ngrok_file_path, 'r') as file:
@@ -533,7 +578,8 @@ def start_flask():
 
    sleep(2)
    lcd.text("Bersii Refill", 1)
-   lcd.text("Ketik jml refill", 2)
+   # lcd.text("Ketik jml refill", 2)
+   lcd.text("Ketik ID user", 2)
 
    scheduler.init_app(app)
    scheduler.start()
@@ -545,110 +591,252 @@ def set_pir():
     return False
 
 # USB Keyboard input handling
-def monitor_usb_keyboard():
-   solenoid.on()
-   key_mapping = {
-      89: '1',
-      90: '2',
-      91: '3',
-      92: '4',
-      93: '5',
-      94: '6',
-      95: '7',
-      96: '8',
-      97: '9',
-      98: '0',
-      99: '.',
-      88: 'enter',
-      42: 'delete',
-   }
+# def monitor_usb_keyboard():
+#    # solenoid.off()
+#    pompas('off')
+#    key_mapping = {
+#       89: '1',
+#       90: '2',
+#       91: '3',
+#       92: '4',
+#       93: '5',
+#       94: '6',
+#       95: '7',
+#       96: '8',
+#       97: '9',
+#       98: '0',
+#       99: '.',
+#       88: 'enter',
+#       42: 'delete',
+#    }
 
-   refill_output = OutputDevice(pin=mesin_pin, pin_factory=pigpiof)
+#    nomorid = None
+#    fp = open('/dev/hidraw0', 'rb')
+#    while True:
+#       buffer = fp.read(8)
+#       for c in buffer:
+#          if c > 0:
+#             if c in key_mapping:
+#                char = key_mapping[c]
+#                if char == 'enter':
+#                   nomorid = ''.join(nomorid_queue.queue)
+#                   break
+#                elif char == 'delete':
+#                   if not nomorid_queue.empty():
+#                      queue_list = list(nomorid_queue.queue)
+#                      if queue_list:
+#                         queue_list.pop()
+#                         nomorid_queue.queue = queue_list
+#                         lcd.text('ID User', 1)
+#                         lcd.text(''.join(nomorid_queue.queue), 2)
+#                else:
+#                   nomorid_queue.put(char)
+#                   lcd.text('ID User', 1)
+#                   lcd.text(''.join(nomorid_queue.queue), 2)
+#             else:
+#                lcd.text('ID User', 1)
+#                lcd.text(f"Unknown key: {c}", 2)
+#       break
 
-   fp = open('/dev/hidraw0', 'rb')
-   while True:
-      buffer = fp.read(8)
-      for c in buffer:
-         if c > 0:
-            if c in key_mapping:
-               char = key_mapping[c]
-               if char == 'enter':
-                  user_input = ''.join(input_queue.queue)
-                  if not user_input or user_input == '0':
-                     break
-                  input_queue.queue.clear()
-                  lcd.clear()
-                  lcd.text("Letakkan Botol", 1)
-                  lcd.text("di bawah", 2)
-                  # Cek apakah ada botol di bawah dengan PIR
-                  rfl = set_pir()
-                  while rfl == False:
-                     sleep(0.1)
-                     rfl = set_pir()
-                     if rfl == True:
-                        break
-                  lcd.clear()
+#    print(nomorid)
 
-                  # Kalau pakai sensor beneran
-                  # lcd.text(f"Mengisi: {user_input} ltr", 1)
-                  # liter = 10
-                  # flin = float(user_input)
-                  # stk = 0
-                  # while stk < flin:
-                  #    lcd.text(f"{stk} liter", 2)
-                  #    GPIO.output(refill, GPIO.HIGH)
-                  #    liter = liter - stk
-                  #    if(stk == flin):
-                  #       break
-                  # GPIO.output(refill, GPIO.LOW)
+#    fp = open('/dev/hidraw0', 'rb')
+#    while True:
+#       buffer = fp.read(8)
+#       for c in buffer:
+#          if c > 0:
+#             if c in key_mapping:
+#                char = key_mapping[c]
+#                if char == 'enter':
+#                   user_input = ''.join(input_queue.queue)
+#                   if not user_input or user_input == '0':
+#                      break
+#                   input_queue.queue.clear()
+#                   lcd.clear()
+#                   lcd.text("Letakkan Botol", 1)
+#                   lcd.text("di bawah", 2)
+#                   # Cek apakah ada botol di bawah dengan PIR
+#                   rfl = set_pir()
+#                   while rfl == False:
+#                      sleep(0.1)
+#                      rfl = set_pir()
+#                      if rfl == True:
+#                         break
+#                   lcd.clear()
 
-                  for i in range(5, 0, -1):
-                     lcd.text("Mengisi dalam : ", 1)
-                     lcd.text(f"{i}", 2)
-                     sleep(0.5)
-                     if i == 0:
-                        break
+#                   # Kalau pakai sensor beneran
+#                   # lcd.text(f"Mengisi: {user_input} ltr", 1)
+#                   # liter = 10
+#                   # flin = float(user_input)
+#                   # stk = 0
+#                   # while stk < flin:
+#                   #    lcd.text(f"{stk} liter", 2)
+#                   #    GPIO.output(refill, GPIO.HIGH)
+#                   #    liter = liter - stk
+#                   #    if(stk == flin):
+#                   #       break
+#                   # GPIO.output(refill, GPIO.LOW)
+
+#                   for i in range(5, 0, -1):
+#                      lcd.text("Mengisi dalam : ", 1)
+#                      lcd.text(f"{i}", 2)
+#                      sleep(0.5)
+#                      if i == 0:
+#                         break
                   
-                  # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
-                  lcd.text(f"Mengisi: {user_input} ltr", 1)
-                  liter = 10
-                  flin = float(user_input)
-                  for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
-                     lcd.text(f"{stk:.1f} liter", 2)
-                     # GPIO.output(refill, GPIO.HIGH)
-                     refill_output.on()
-                     solenoid.off()
-                     liter = float(liter) - stk
-                     sleep(1)  # Adjust the sleep duration as needed
-                     if stk == flin:
-                        break
-                  # GPIO.output(refill, GPIO.LOW)
-                  refill_output.off()
-                  solenoid.on()
-                  lcd.text("Pengisian telah", 1)
-                  lcd.text("selesai", 2)
-                  # refill_output.close()
-                  sleep(5)
-                  lcd.clear()
-                  lcd.text("Bersii Refill", 1)
-                  lcd.text("Ketik jml refill", 2)
+#                   # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
+#                   lcd.text(f"Mengisi: {user_input} ltr", 1)
+#                   liter = 10
+#                   flin = float(user_input)
+#                   # solenoid.on()
+#                   pompas('on')
+#                   for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
+#                      lcd.text(f"{stk:.1f} liter", 2)
+#                      # GPIO.output(refill, GPIO.HIGH)
+#                      # solenoid.off()
+#                      # pompas('on')
+#                      liter = float(liter) - stk
+#                      sleep(1)  # Adjust the sleep duration as needed
+#                      if stk == flin:
+#                         break
+#                   # GPIO.output(refill, GPIO.LOW)
+#                   pompas('off')
+#                   # solenoid.off()
+#                   lcd.text("Pengisian telah", 1)
+#                   lcd.text("selesai", 2)
+#                   # refill_output.close()
+#                   sleep(5)
+#                   lcd.clear()
+#                   lcd.text("Bersii Refill", 1)
+#                   lcd.text("Ketik jml refill", 2)
 
-               elif char == 'delete':
-                  if not input_queue.empty():
-                     queue_list = list(input_queue.queue)
-                     if queue_list:
-                        queue_list.pop()
-                        input_queue.queue = queue_list
-                        lcd.text('Jumlah Pengisian (l)', 1)
+#                elif char == 'delete':
+#                   if not input_queue.empty():
+#                      queue_list = list(input_queue.queue)
+#                      if queue_list:
+#                         queue_list.pop()
+#                         input_queue.queue = queue_list
+#                         lcd.text('Jumlah Pengisian (l)', 1)
+#                         lcd.text(''.join(input_queue.queue), 2)
+#                else:
+#                   input_queue.put(char)
+#                   lcd.text('Jumlah Pengisian (l)', 1)
+#                   lcd.text(''.join(input_queue.queue), 2)
+#             else:
+#                lcd.text('Jumlah Pengisian (l)', 1)
+#                lcd.text(f"Unknown key: {c}", 2)
+
+def monitor_usb_keyboard():
+    key_mapping = {
+        89: '1',
+        90: '2',
+        91: '3',
+        92: '4',
+        93: '5',
+        94: '6',
+        95: '7',
+        96: '8',
+        97: '9',
+        98: '0',
+        99: '.',
+        88: 'enter',
+        42: 'delete',
+    }
+
+    input_queue = nomorid_queue  # Start with the user ID queue
+    fp = open('/dev/hidraw0', 'rb')
+
+    while True:
+        buffer = fp.read(8)
+        for c in buffer:
+            if c > 0:
+                if c in key_mapping:
+                    char = key_mapping[c]
+                    if char == 'enter':
+                        if input_queue is nomorid_queue:
+                            # Switch to the refill quantity queue after 'enter' is pressed for user ID
+                            input_queue = input_queue if input_queue is nomorid_queue else nomorid_queue
+                            lcd.clear()
+                            lcd.text('ID User' if input_queue is nomorid_queue else 'Jumlah Pengisian (l)', 1)
+                            lcd.text(''.join(input_queue.queue), 2)
+                        else:
+                            user_input = ''.join(input_queue.queue)
+                            if not user_input or user_input == '0':
+                                break
+                            input_queue.queue.clear()
+                            lcd.clear()
+                            lcd.text("Letakkan Botol", 1)
+                            lcd.text("di bawah", 2)
+                            # Cek apakah ada botol di bawah dengan PIR
+                            rfl = set_pir()
+                            while rfl == False:
+                                sleep(0.1)
+                                rfl = set_pir()
+                                if rfl == True:
+                                    break
+                            lcd.clear()
+
+                            # Kalau pakai sensor beneran
+                            # lcd.text(f"Mengisi: {user_input} ltr", 1)
+                            # liter = 10
+                            # flin = float(user_input)
+                            # stk = 0
+                            # while stk < flin:
+                            #    lcd.text(f"{stk} liter", 2)
+                            #    GPIO.output(refill, GPIO.HIGH)
+                            #    liter = liter - stk
+                            #    if(stk == flin):
+                            #       break
+                            # GPIO.output(refill, GPIO.LOW)
+
+                            for i in range(5, 0, -1):
+                                lcd.text("Mengisi dalam : ", 1)
+                                lcd.text(f"{i}", 2)
+                                sleep(0.5)
+                                if i == 0:
+                                    break
+
+                            # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
+                            lcd.text(f"Mengisi: {user_input} ltr", 1)
+                            liter = 10
+                            flin = float(user_input)
+                            # solenoid.on()
+                            pompas('on')
+                            for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
+                                lcd.text(f"{stk:.1f} liter", 2)
+                                # GPIO.output(refill, GPIO.HIGH)
+                                # solenoid.off()
+                                # pompas('on')
+                                liter = float(liter) - stk
+                                sleep(1)  # Adjust the sleep duration as needed
+                                if stk == flin:
+                                    break
+                            # GPIO.output(refill, GPIO.LOW)
+                            pompas('off')
+                            # solenoid.off()
+                            lcd.text("Pengisian telah", 1)
+                            lcd.text("selesai", 2)
+                            # refill_output.close()
+                            sleep(5)
+                            lcd.clear()
+                            lcd.text("Bersii Refill", 1)
+                            lcd.text("Ketik jml refill", 2)
+                            input_queue = nomorid_queue
+                    elif char == 'delete':
+                        if not input_queue.empty():
+                            queue_list = list(input_queue.queue)
+                            if queue_list:
+                                queue_list.pop()
+                                input_queue.queue = queue_list
+                                lcd.text('ID User' if input_queue is nomorid_queue else 'Jumlah Pengisian (l)', 1)
+                                lcd.text(''.join(input_queue.queue), 2)
+                    else:
+                        input_queue.put(char)
+                        lcd.text('ID User' if input_queue is nomorid_queue else 'Jumlah Pengisian (l)', 1)
                         lcd.text(''.join(input_queue.queue), 2)
-               else:
-                  input_queue.put(char)
-                  lcd.text('Jumlah Pengisian (l)', 1)
-                  lcd.text(''.join(input_queue.queue), 2)
-            else:
-               lcd.text('Jumlah Pengisian (l)', 1)
-               lcd.text(f"Unknown key: {c}", 2)
-
+                else:
+                    lcd.text('ID User' if input_queue is nomorid_queue else 'Jumlah Pengisian (l)', 1)
+                    lcd.text(f"Unknown key: {c}", 2)
 
 if __name__ == "__main__":
    try:
@@ -685,7 +873,9 @@ if __name__ == "__main__":
       
    except KeyboardInterrupt:
       lcd.clear()
-      solenoid.off()
+      # solenoid.off()
+      pompas('off')
       # Reset GPIO dan Token yang tersimpan
       revoke = revoke_all()
+      session.clear()
       # GPIO.cleanup()	
