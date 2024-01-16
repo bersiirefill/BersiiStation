@@ -1,6 +1,7 @@
 '''
 Bersii Refill Station - V2.0 / Juni 2023
 '''
+import multiprocessing
 import base64
 import requests
 import json
@@ -15,6 +16,7 @@ import usb.core
 import usb.util
 import sys
 # import ngrok
+# from goto import with_goto
 from gpiozero import MotionSensor, DistanceSensor, OutputDevice, Device
 from gpiozero.pins.pigpio import PiGPIOFactory
 from time import sleep
@@ -583,7 +585,8 @@ def start_flask():
 
    scheduler.init_app(app)
    scheduler.start()
-   app.run(host='0.0.0.0', port=6100, debug=False, ssl_context='adhoc')
+   # app.run(host='0.0.0.0', port=6100, debug=False, ssl_context='adhoc')
+   app.run(host='0.0.0.0', port=6100, debug=False)
 
 def set_pir():
     if pir.wait_for_motion():
@@ -591,252 +594,156 @@ def set_pir():
     return False
 
 # USB Keyboard input handling
-# def monitor_usb_keyboard():
-#    # solenoid.off()
-#    pompas('off')
-#    key_mapping = {
-#       89: '1',
-#       90: '2',
-#       91: '3',
-#       92: '4',
-#       93: '5',
-#       94: '6',
-#       95: '7',
-#       96: '8',
-#       97: '9',
-#       98: '0',
-#       99: '.',
-#       88: 'enter',
-#       42: 'delete',
-#    }
-
-#    nomorid = None
-#    fp = open('/dev/hidraw0', 'rb')
-#    while True:
-#       buffer = fp.read(8)
-#       for c in buffer:
-#          if c > 0:
-#             if c in key_mapping:
-#                char = key_mapping[c]
-#                if char == 'enter':
-#                   nomorid = ''.join(nomorid_queue.queue)
-#                   break
-#                elif char == 'delete':
-#                   if not nomorid_queue.empty():
-#                      queue_list = list(nomorid_queue.queue)
-#                      if queue_list:
-#                         queue_list.pop()
-#                         nomorid_queue.queue = queue_list
-#                         lcd.text('ID User', 1)
-#                         lcd.text(''.join(nomorid_queue.queue), 2)
-#                else:
-#                   nomorid_queue.put(char)
-#                   lcd.text('ID User', 1)
-#                   lcd.text(''.join(nomorid_queue.queue), 2)
-#             else:
-#                lcd.text('ID User', 1)
-#                lcd.text(f"Unknown key: {c}", 2)
-#       break
-
-#    print(nomorid)
-
-#    fp = open('/dev/hidraw0', 'rb')
-#    while True:
-#       buffer = fp.read(8)
-#       for c in buffer:
-#          if c > 0:
-#             if c in key_mapping:
-#                char = key_mapping[c]
-#                if char == 'enter':
-#                   user_input = ''.join(input_queue.queue)
-#                   if not user_input or user_input == '0':
-#                      break
-#                   input_queue.queue.clear()
-#                   lcd.clear()
-#                   lcd.text("Letakkan Botol", 1)
-#                   lcd.text("di bawah", 2)
-#                   # Cek apakah ada botol di bawah dengan PIR
-#                   rfl = set_pir()
-#                   while rfl == False:
-#                      sleep(0.1)
-#                      rfl = set_pir()
-#                      if rfl == True:
-#                         break
-#                   lcd.clear()
-
-#                   # Kalau pakai sensor beneran
-#                   # lcd.text(f"Mengisi: {user_input} ltr", 1)
-#                   # liter = 10
-#                   # flin = float(user_input)
-#                   # stk = 0
-#                   # while stk < flin:
-#                   #    lcd.text(f"{stk} liter", 2)
-#                   #    GPIO.output(refill, GPIO.HIGH)
-#                   #    liter = liter - stk
-#                   #    if(stk == flin):
-#                   #       break
-#                   # GPIO.output(refill, GPIO.LOW)
-
-#                   for i in range(5, 0, -1):
-#                      lcd.text("Mengisi dalam : ", 1)
-#                      lcd.text(f"{i}", 2)
-#                      sleep(0.5)
-#                      if i == 0:
-#                         break
-                  
-#                   # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
-#                   lcd.text(f"Mengisi: {user_input} ltr", 1)
-#                   liter = 10
-#                   flin = float(user_input)
-#                   # solenoid.on()
-#                   pompas('on')
-#                   for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
-#                      lcd.text(f"{stk:.1f} liter", 2)
-#                      # GPIO.output(refill, GPIO.HIGH)
-#                      # solenoid.off()
-#                      # pompas('on')
-#                      liter = float(liter) - stk
-#                      sleep(1)  # Adjust the sleep duration as needed
-#                      if stk == flin:
-#                         break
-#                   # GPIO.output(refill, GPIO.LOW)
-#                   pompas('off')
-#                   # solenoid.off()
-#                   lcd.text("Pengisian telah", 1)
-#                   lcd.text("selesai", 2)
-#                   # refill_output.close()
-#                   sleep(5)
-#                   lcd.clear()
-#                   lcd.text("Bersii Refill", 1)
-#                   lcd.text("Ketik jml refill", 2)
-
-#                elif char == 'delete':
-#                   if not input_queue.empty():
-#                      queue_list = list(input_queue.queue)
-#                      if queue_list:
-#                         queue_list.pop()
-#                         input_queue.queue = queue_list
-#                         lcd.text('Jumlah Pengisian (l)', 1)
-#                         lcd.text(''.join(input_queue.queue), 2)
-#                else:
-#                   input_queue.put(char)
-#                   lcd.text('Jumlah Pengisian (l)', 1)
-#                   lcd.text(''.join(input_queue.queue), 2)
-#             else:
-#                lcd.text('Jumlah Pengisian (l)', 1)
-#                lcd.text(f"Unknown key: {c}", 2)
-
+# @with_goto
 def monitor_usb_keyboard():
-    key_mapping = {
-        89: '1',
-        90: '2',
-        91: '3',
-        92: '4',
-        93: '5',
-        94: '6',
-        95: '7',
-        96: '8',
-        97: '9',
-        98: '0',
-        99: '.',
-        88: 'enter',
-        42: 'delete',
-    }
+   # solenoid.off()
+   pompas('off')
+   key_mapping = {
+      89: '1',
+      90: '2',
+      91: '3',
+      92: '4',
+      93: '5',
+      94: '6',
+      95: '7',
+      96: '8',
+      97: '9',
+      98: '0',
+      99: '.',
+      88: 'enter',
+      42: 'delete',
+   }
 
-    input_queue = nomorid_queue  # Start with the user ID queue
-    fp = open('/dev/hidraw0', 'rb')
+   nomorid = None
+   flag = 0
+   fp = open('/dev/hidraw0', 'rb')
+   while True:
+      buffer = fp.read(8)
+      for c in buffer:
+         if c > 0:
+            if c in key_mapping:
+               char = key_mapping[c]
+               if char == 'enter':
+                  nomorid = ''.join(nomorid_queue.queue)
+                  nomorid_queue.queue.clear()
+                  # goto .start
+                  flag = 1
+                  break
+               elif char == 'delete':
+                  if not nomorid_queue.empty():
+                     queue_list = list(nomorid_queue.queue)
+                     if queue_list:
+                        queue_list.pop()
+                        nomorid_queue.queue = queue_list
+                        lcd.text('ID User', 1)
+                        lcd.text(''.join(nomorid_queue.queue), 2)
+               else:
+                  nomorid_queue.put(char)
+                  lcd.text('ID User', 1)
+                  lcd.text(''.join(nomorid_queue.queue), 2)
+            else:
+               lcd.text('ID User', 1)
+               lcd.text(f"Unknown key: {c}", 2)
+      if flag == 1:
+         break
+   # label .start
+   sleep(1)
+   # print(nomorid)
+   lcd.clear()
+   lcd.text('Jumlah Pengisian (l)', 1)
 
-    while True:
-        buffer = fp.read(8)
-        for c in buffer:
-            if c > 0:
-                if c in key_mapping:
-                    char = key_mapping[c]
-                    if char == 'enter':
-                        if input_queue is nomorid_queue:
-                            # Switch to the refill quantity queue after 'enter' is pressed for user ID
-                            input_queue = input_queue if input_queue is nomorid_queue else nomorid_queue
-                            lcd.clear()
-                            lcd.text('ID User' if input_queue is nomorid_queue else 'Jumlah Pengisian (l)', 1)
-                            lcd.text(''.join(input_queue.queue), 2)
-                        else:
-                            user_input = ''.join(input_queue.queue)
-                            if not user_input or user_input == '0':
-                                break
-                            input_queue.queue.clear()
-                            lcd.clear()
-                            lcd.text("Letakkan Botol", 1)
-                            lcd.text("di bawah", 2)
-                            # Cek apakah ada botol di bawah dengan PIR
-                            rfl = set_pir()
-                            while rfl == False:
-                                sleep(0.1)
-                                rfl = set_pir()
-                                if rfl == True:
-                                    break
-                            lcd.clear()
+   fp = open('/dev/hidraw0', 'rb')
+   while True:
+      buffer = fp.read(8)
+      for c in buffer:
+         if c > 0:
+            if c in key_mapping:
+               char = key_mapping[c]
+               if char == 'enter':
+                  user_input = ''.join(input_queue.queue)
+                  if not user_input or user_input == '0':
+                     break
+                  input_queue.queue.clear()
+                  lcd.clear()
+                  lcd.text("Letakkan Botol", 1)
+                  lcd.text("di bawah", 2)
+                  # Cek apakah ada botol di bawah dengan PIR
+                  rfl = set_pir()
+                  while rfl == False:
+                     # print(rfl)
+                     sleep(0.1)
+                     # rfl = set_pir()
+                     if rfl == True:
+                        break
+                  lcd.clear()
 
-                            # Kalau pakai sensor beneran
-                            # lcd.text(f"Mengisi: {user_input} ltr", 1)
-                            # liter = 10
-                            # flin = float(user_input)
-                            # stk = 0
-                            # while stk < flin:
-                            #    lcd.text(f"{stk} liter", 2)
-                            #    GPIO.output(refill, GPIO.HIGH)
-                            #    liter = liter - stk
-                            #    if(stk == flin):
-                            #       break
-                            # GPIO.output(refill, GPIO.LOW)
+                  # Kalau pakai sensor beneran
+                  # lcd.text(f"Mengisi: {user_input} ltr", 1)
+                  # liter = 10
+                  # flin = float(user_input)
+                  # stk = 0
+                  # while stk < flin:
+                  #    lcd.text(f"{stk} liter", 2)
+                  #    GPIO.output(refill, GPIO.HIGH)
+                  #    liter = liter - stk
+                  #    if(stk == flin):
+                  #       break
+                  # GPIO.output(refill, GPIO.LOW)
 
-                            for i in range(5, 0, -1):
-                                lcd.text("Mengisi dalam : ", 1)
-                                lcd.text(f"{i}", 2)
-                                sleep(0.5)
-                                if i == 0:
-                                    break
+                  for i in range(5, 0, -1):
+                     lcd.text("Mengisi dalam : ", 1)
+                     lcd.text(f"{i}", 2)
+                     sleep(0.5)
+                     if i == 0:
+                        break
+                  
+                  # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
+                  lcd.text(f"Mengisi: {user_input} ltr", 1)
+                  liter = 10
+                  flin = float(user_input)
+                  # solenoid.on()
+                  pompas('on')
+                  for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
+                     lcd.text(f"{stk:.1f} liter", 2)
+                     # GPIO.output(refill, GPIO.HIGH)
+                     # solenoid.off()
+                     # pompas('on')
+                     liter = float(liter) - stk
+                     sleep(1)  # Adjust the sleep duration as needed
+                     if stk == flin:
+                        break
+                  # GPIO.output(refill, GPIO.LOW)
+                  pompas('off')
+                  # solenoid.off()
+                  lcd.text("Pengisian telah", 1)
+                  lcd.text("selesai", 2)
+                  # refill_output.close()
+                  sleep(5)
+                  lcd.clear()
+                  flag = 0
+                  # lcd.text("Bersii Refill", 1)
+                  # lcd.text("Ketik jml refill", 2)
+                  lcd.text("Bersii Refill", 1)
+                  lcd.text("Ketik ID user", 2)
+                  monitor_usb_keyboard()
 
-                            # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
-                            lcd.text(f"Mengisi: {user_input} ltr", 1)
-                            liter = 10
-                            flin = float(user_input)
-                            # solenoid.on()
-                            pompas('on')
-                            for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
-                                lcd.text(f"{stk:.1f} liter", 2)
-                                # GPIO.output(refill, GPIO.HIGH)
-                                # solenoid.off()
-                                # pompas('on')
-                                liter = float(liter) - stk
-                                sleep(1)  # Adjust the sleep duration as needed
-                                if stk == flin:
-                                    break
-                            # GPIO.output(refill, GPIO.LOW)
-                            pompas('off')
-                            # solenoid.off()
-                            lcd.text("Pengisian telah", 1)
-                            lcd.text("selesai", 2)
-                            # refill_output.close()
-                            sleep(5)
-                            lcd.clear()
-                            lcd.text("Bersii Refill", 1)
-                            lcd.text("Ketik jml refill", 2)
-                            input_queue = nomorid_queue
-                    elif char == 'delete':
-                        if not input_queue.empty():
-                            queue_list = list(input_queue.queue)
-                            if queue_list:
-                                queue_list.pop()
-                                input_queue.queue = queue_list
-                                lcd.text('ID User' if input_queue is nomorid_queue else 'Jumlah Pengisian (l)', 1)
-                                lcd.text(''.join(input_queue.queue), 2)
-                    else:
-                        input_queue.put(char)
-                        lcd.text('ID User' if input_queue is nomorid_queue else 'Jumlah Pengisian (l)', 1)
+               elif char == 'delete':
+                  if not input_queue.empty():
+                     queue_list = list(input_queue.queue)
+                     if queue_list:
+                        queue_list.pop()
+                        input_queue.queue = queue_list
+                        lcd.text('Jumlah Pengisian (l)', 1)
                         lcd.text(''.join(input_queue.queue), 2)
-                else:
-                    lcd.text('ID User' if input_queue is nomorid_queue else 'Jumlah Pengisian (l)', 1)
-                    lcd.text(f"Unknown key: {c}", 2)
+               else:
+                  input_queue.put(char)
+                  lcd.text('Jumlah Pengisian (l)', 1)
+                  lcd.text(''.join(input_queue.queue), 2)
+            else:
+               lcd.text('Jumlah Pengisian (l)', 1)
+               lcd.text(f"Unknown key: {c}", 2)
+
+
 
 if __name__ == "__main__":
    try:
@@ -846,7 +753,7 @@ if __name__ == "__main__":
       flask_thread.daemon = True
       flask_thread.start()
 
-      # Check if the Flask & USB thread is alive
+      # # Check if the Flask & USB thread is alive
       while not flask_thread.is_alive():
          sleep(0.1)
       print("Flask thread is now running.")
@@ -864,6 +771,16 @@ if __name__ == "__main__":
       while True:
          sleep(1)
 
+      # flask_process = multiprocessing.Process(target=start_flask)
+      # flask_process.start()
+      # sleep(5)  # Allow Flask to start before starting the USB process
+
+      # usb_process = multiprocessing.Process(target=monitor_usb_keyboard)
+      # usb_process.start()
+
+      # while True:
+      #    sleep(1)
+
       # while True:
       #    ultrasonic_sensor = DistanceSensor(echo=echopin, trigger=trigpin, pin_factory=pigpiof)
       #    distance = ultrasonic_sensor.distance * 100
@@ -879,3 +796,11 @@ if __name__ == "__main__":
       revoke = revoke_all()
       session.clear()
       # GPIO.cleanup()	
+
+       # Terminate processes on keyboard interrupt
+      flask_process.terminate()
+      usb_process.terminate()
+
+      # Join processes to wait for their completion
+      flask_process.join()
+      usb_process.join()
