@@ -614,6 +614,13 @@ def monitor_usb_keyboard():
       42: 'delete',
    }
 
+   key_mapping_jumlah = {
+      89: '1',
+      90: '2',
+      88: 'enter',
+      42: 'delete',
+   }
+
    nomorid = None
    flag = 0
    fp = open('/dev/hidraw0', 'rb')
@@ -627,8 +634,26 @@ def monitor_usb_keyboard():
                   nomorid = ''.join(nomorid_queue.queue)
                   nomorid_queue.queue.clear()
                   # goto .start
-                  flag = 1
-                  break
+                  data = {
+                     'nomorid': nomorid,
+                     'nomor_seri': getserial()
+                  }
+                  rqs = requests.post(url = "https://savon.bersii.my.id/api/check_user", data = data, headers = {"Accept": "application/json"})
+                  rds = rqs.json()
+                  status = rds["status"]
+                  if status == 1:
+                     flag = 1
+                     break
+                  else:
+                     flag = 0
+                     lcd.clear()
+                     lcd.text("Data user tidak", 1)
+                     lcd.text("ditemukan!", 2)
+                     sleep(1)
+                     lcd.clear()
+                     lcd.text('ID User', 1)
+                     monitor_usb_keyboard()
+                  
                elif char == 'delete':
                   if not nomorid_queue.empty():
                      queue_list = list(nomorid_queue.queue)
@@ -651,14 +676,15 @@ def monitor_usb_keyboard():
    # print(nomorid)
    lcd.clear()
    lcd.text('Jumlah Pengisian (l)', 1)
+   lcd.text('1. 500ml 2. 1ltr', 2)
 
    fp = open('/dev/hidraw0', 'rb')
    while True:
       buffer = fp.read(8)
       for c in buffer:
          if c > 0:
-            if c in key_mapping:
-               char = key_mapping[c]
+            if c in key_mapping_jumlah:
+               char = key_mapping_jumlah[c]
                if char == 'enter':
                   user_input = ''.join(input_queue.queue)
                   if not user_input or user_input == '0':
@@ -700,18 +726,43 @@ def monitor_usb_keyboard():
                   # Liter sementara (kalau sudah pakai HCSR04 baru diwhile)
                   lcd.text(f"Mengisi: {user_input} ltr", 1)
                   liter = 10
-                  flin = float(user_input)
+                  # flin = float(user_input)
+                  flin = int(user_input)
                   # solenoid.on()
                   pompas('on')
-                  for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
-                     lcd.text(f"{stk:.1f} liter", 2)
-                     # GPIO.output(refill, GPIO.HIGH)
-                     # solenoid.off()
-                     # pompas('on')
-                     liter = float(liter) - stk
-                     sleep(1)  # Adjust the sleep duration as needed
-                     if stk == flin:
+                  ultrasonic_sensor = ultras()
+                  distance = ultrasonic_sensor["distance"]
+
+                  if flin == 1:
+                     target = distance - 1.02
+                  elif flin == 2:
+                     target = distance - 2.04
+                  else:
+                     lcd.text("Jumlah tidak", 1)
+                     lcd.text("dikenali", 2)
+                     sleep(1)
+                     lcd.clear()
+                     lcd.text("Bersii Refill", 1)
+                     lcd.text("Ketik ID user", 2)
+                     monitor_usb_keyboard()
+
+                  while distance > target:
+                     sleep(0.5)
+                     ultr = ultras()
+                     distance = ultr["distance"]
+                     if distance <= target:
                         break
+                     
+                  # for stk in [i / 10.0 for i in range(int((flin * 10) + 1))]:
+                  #    lcd.text(f"{stk:.1f} liter", 2)
+                  #    # GPIO.output(refill, GPIO.HIGH)
+                  #    # solenoid.off()
+                  #    # pompas('on')
+                  #    liter = float(liter) - stk
+                  #    sleep(1)  # Adjust the sleep duration as needed
+                  #    if stk == flin:
+                  #       break
+
                   # GPIO.output(refill, GPIO.LOW)
                   pompas('off')
                   # solenoid.off()
@@ -735,13 +786,18 @@ def monitor_usb_keyboard():
                         input_queue.queue = queue_list
                         lcd.text('Jumlah Pengisian (l)', 1)
                         lcd.text(''.join(input_queue.queue), 2)
+               
                else:
+                  input_queue.queue.clear()
                   input_queue.put(char)
                   lcd.text('Jumlah Pengisian (l)', 1)
                   lcd.text(''.join(input_queue.queue), 2)
+
             else:
                lcd.text('Jumlah Pengisian (l)', 1)
                lcd.text(f"Unknown key: {c}", 2)
+               sleep(1)
+               lcd.text('1. 500ml 2. 1ltr', 2)
 
 
 
